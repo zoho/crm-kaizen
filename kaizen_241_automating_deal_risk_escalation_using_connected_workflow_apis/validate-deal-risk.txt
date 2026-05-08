@@ -1,0 +1,121 @@
+string automation.validate_deal_risk(String dealId)
+{
+//-----------------------------------
+// FETCH DEAL
+//-----------------------------------
+dealRecord = zoho.crm.getRecordById("Deals",dealId);
+stage = dealRecord.get("Stage");
+amount = dealRecord.get("Amount");
+currentApprovalStatus = ifnull(dealRecord.get("Approval_Status"),"");
+accountInfo = dealRecord.get("Account_Name");
+accountName = accountInfo.get("name");
+contactInfo = dealRecord.get("Contact_Name");
+contactId = contactInfo.get("id");
+contactRecord = zoho.crm.getRecordById("Contacts",contactId);
+contactEmail = contactRecord.get("Email");
+info "Stage: " + stage;
+info "Amount: " + amount;
+info "Current Approval Status: " + currentApprovalStatus;
+info "Account: " + accountName;
+info "Contact Email: " + contactEmail;
+//-----------------------------------
+// QUALIFICATION CHECK
+//-----------------------------------
+if(stage != "Negotiation/Review")
+{
+	return "Deal does not qualify";
+}
+if(amount < 250000)
+{
+	return "Deal amount below threshold";
+}
+//-----------------------------------
+// BOOKS CHECK
+//-----------------------------------
+booksResponse = invokeurl
+[
+	url :"https://www.zohoapis.com/books/v3/invoices"
+	type :GET
+	connection:"books_connection"
+];
+invoices = booksResponse.get("invoices");
+riskyInvoiceCount = 0;
+for each  invoice in invoices
+{
+	if(invoice.get("customer_name") == accountName && (invoice.get("status") == "unpaid" || invoice.get("status") == "overdue" || invoice.get("status") == "draft"))
+	{
+		riskyInvoiceCount = riskyInvoiceCount + 1;
+	}
+}
+info "Risky invoices: " + riskyInvoiceCount;
+//-----------------------------------
+// FIND MATCHING DESK CONTACT
+//-----------------------------------
+deskContactResponse = invokeurl
+[
+	url :"https://desk.zoho.com/api/v1/contacts"
+	type :GET
+	connection:"desk_connection"
+];
+deskContacts = deskContactResponse.get("data");
+deskContactId = "";
+for each  dc in deskContacts
+{
+	if(dc.get("email") == contactEmail)
+	{
+		deskContactId = dc.get("id");
+		break;
+	}
+}
+info "Matched Desk Contact ID: " + deskContactId;
+//-----------------------------------
+// DESK TICKET CHECK
+//-----------------------------------
+deskResponse = invokeurl
+[
+	url :"https://desk.zoho.com/api/v1/tickets"
+	type :GET
+	connection:"desk_connection"
+];
+tickets = deskResponse.get("data");
+openTicketCount = 0;
+for each  ticket in tickets
+{
+	ticketContactId = ticket.get("contactId");
+	ticketStatus = ticket.get("status");
+	if(ticketContactId == deskContactId && ticketStatus == "Open")
+	{
+		openTicketCount = openTicketCount + 1;
+	}
+}
+info "Open tickets: " + openTicketCount;
+//-----------------------------------
+// DETERMINE NEW STATUS
+//-----------------------------------
+newApprovalStatus = "Approved";
+if(riskyInvoiceCount > 0 || openTicketCount > 0)
+{
+	newApprovalStatus = "Escalation Required";
+}
+//-----------------------------------
+// UPDATE ONLY IF REQUIRED
+//-----------------------------------
+updateMap = Map();
+updateMap.put("Invoice_Risk_Count",riskyInvoiceCount);
+updateMap.put("Open_Ticket_Count",openTicketCount);
+if(currentApprovalStatus != newApprovalStatus)
+{
+	updateMap.put("Approval_Status",newApprovalStatus);
+}
+if(updateMap.size() > 0)
+{
+	info updateMap;
+	response = zoho.crm.updateRecord("Deals",dealId,updateMap);
+	info response;
+}
+else
+{
+	info "No update required";
+}
+return "Risk validation completed";
+}

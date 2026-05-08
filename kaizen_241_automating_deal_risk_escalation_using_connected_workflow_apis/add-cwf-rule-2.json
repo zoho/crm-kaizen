@@ -1,0 +1,51 @@
+{
+  "rules": [
+    {
+      "_node": {
+        "id": "7398333000000767007"
+      },
+      "execute_when": {
+        "type": "edit",
+        "details": {
+          "trigger_module": {
+            "api_name": "Risk_Reviews",
+            "id": "7398333000000728015"
+          },
+          "repeat": true
+        }
+      },
+      "module": {
+        "api_name": "Risk_Reviews",
+        "id": "7398333000000728015"
+      },
+      "conditions": [
+        {
+          "criteria_details": {
+            "criteria": {
+              "comparator": "equal",
+              "field": {
+                "api_name": "Review_Status",
+                "id": "7398333000000728644"
+              },
+              "type": "value",
+              "value": "Approved"
+            },
+            "relational_criteria": null
+          },
+          "instant_actions": {
+            "actions": [
+              {
+                "id": "7398333000000758002",
+                "type": "field_updates"
+              },
+              {
+                "id": "7398333000000771001",
+                "type": "email_notifications"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,50 @@
+{
+    "email_notifications": [
+        { "name" : "Deal Risk Escalation Notification",
+            "template": {
+                "name": "Deal Risk Escalation Alert",
+                "id": "7398333000000728941"
+            },
+            "reply_to_address": {
+                "resource": {
+                    "id": "7398333000000605001"
+                },
+                "type": "user"
+            },
+             "module": {
+                "api_name": "Deals",
+                "id": "7398333000000002181"
+            },
+                "feature_type": "connected_workflows",
+            "bulk_email": false,
+            "recipients": {
+                "to": [
+                    {
+                        "associated_to": null,
+                        "resource": null,
+                        "details": {
+                            "api_name": "${!Deals.Owner}",
+                            "id": "7398333000000002555"
+                        },
+                        "type": "merge_field"
+                    },
+                    {
+                        "associated_to": null,
+                        "resource": null,
+                        "details": {
+                            "api_name": "${!Deals.Account_Name.Owner}",
+                            "id": "7398333000000002421"
+                        },
+                        "type": "merge_field"
+                    }
+                ]
+            },
+             "from_address": {
+                "resource": {
+                    "id": "7398333000000605001"
+                },
+                "type": "user"
+            }
+        }
+    ]
+}

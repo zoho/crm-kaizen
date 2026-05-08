@@ -1,0 +1,59 @@
+{
+    "workflow_rules": [
+        {
+            "execute_when": {
+                "details": {
+                    "trigger_module": {
+                        "api_name": "Deals",
+                        "id": "7398333000000002181"
+                    },
+                      "criteria": {
+                        "comparator": "equal",
+                        "field": {
+                            "api_name": "Stage",
+                            "id": "7398333000000002565"
+                        },
+                        "type": "value",
+                        "value": "Negotiation/Review"
+                    },
+                    "repeat": true,
+                  "match_all": false
+                },
+                "type": "field_update"
+            },
+            "module": {
+                "api_name": "Deals",
+                "id": "7398333000000002181"
+            },
+            "description": "Automatically validates high-value deals when they enter the Negotiation/Review stage by checking outstanding invoices in Zoho Books and open support tickets in Zoho Desk before allowing deal progression.",
+                "name": "Deal Risk Escalation Workflow",
+            "conditions": [
+                {
+                    "sequence_number": 1,
+                    "instant_actions": {
+                        "actions": [
+                            {
+                                "name": "Validate Deal Risk 1",
+                                "id": "7398333000000605868",
+                                "type": "functions"
+                            }
+                        ]
+                    },
+                    "scheduled_actions": null,
+                    "criteria_details": {
+                        
+                          "criteria": {
+                            "comparator": "greater_than",
+                            "field": {
+                                "api_name": "Amount",
+                                "id": "7398333000000002557"
+                            },
+                            "type": "value",
+                            "value": "250000"
+                        }
+                    }
+                }
+            ]
+        }
+    ]
+}

@@ -1,0 +1,31 @@
+{
+    "email_notifications": [
+        {
+            "template": {
+                "name": "Risk Review Approved",
+                "id": "7398333000000757059"
+            },
+             "name": "Risk Review Approved Notification",
+            "reply_to_address": null,
+            "module": {
+                "api_name": "Risk_Reviews",
+                "id": "7398333000000728015"
+            },
+              "feature_type": "connected_workflows",
+             "bulk_email": false,
+            "recipients": {
+                "to": [
+                    {
+                        "associated_to": null,
+                        "resource": null,
+                        "details": {
+                            "api_name": "${!Risk_Reviews.Owner}",
+                            "id": "7398333000000728034"
+                        },
+                        "type": "merge_field"
+                    }
+                ]
+            }
+        }
+    ]
+}

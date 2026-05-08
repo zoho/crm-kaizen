@@ -1,0 +1,12 @@
+{
+  "connected_workflows": [
+    {
+      "name": "Deal Risk Review Orchestration",
+      "description": "Orchestrates post-validation risk review processes by creating connected review records for deals flagged through Zoho Books and Zoho Desk risk checks.",
+      "primary_module": {
+        "api_name": "Deals",
+        "id": "7398333000000002181"
+      }
+    }
+  ]
+}

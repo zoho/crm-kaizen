@@ -1,0 +1,124 @@
+{
+  "rules": [
+    {
+      "_node": {
+        "id": "7398333000000764003"
+      },
+      "execute_when": {
+        "type": "field_update",
+        "details": {
+          "trigger_module": {
+            "api_name": "Deals",
+            "id": "7398333000000002181"
+          },
+          "criteria": {
+            "comparator": "equal",
+            "field": {
+              "api_name": "Approval_Status",
+              "id": "7398333000000605812"
+            },
+            "type": "value",
+            "value": "Escalation Required"
+          },
+          "repeat": true
+        }
+      },
+      "module": {
+        "api_name": "Deals",
+        "id": "7398333000000002181"
+      },
+      "conditions": [
+        {
+          "instant_actions": {
+            "actions": [
+              {
+                "name": "Risk Reviews",
+                "type": "create_connected_record",
+                "details": {
+                  "module": {
+                    "api_name": "Risk_Reviews",
+                    "id": "7398333000000728015"
+                  },
+                  "layout": {
+                    "name": "Standard",
+                    "id": "7398333000000728014"
+                  },
+                  "apply_restriction": true,
+                  "field_mappings": [
+                    {
+                      "field": {
+                        "api_name": "Name",
+                        "id": "7398333000000728033"
+                      },
+                      "type": "merge_field",
+                      "value": "Deal Risk Escalation Review for ${!Deals.Deal_Name}"
+                    },
+                    {
+                      "field": {
+                        "api_name": "Owner",
+                        "id": "7398333000000728034"
+                      },
+                      "type": "assignment_rule",
+                      "value": "7398333000000757002"
+                    },
+                    {
+                      "field": {
+                        "api_name": "Deal",
+                        "id": "7398333000000728632"
+                      },
+                      "type": "merge_field",
+                      "value": "${!CURRENTRECORD}"
+                    },
+                    {
+                      "field": {
+                        "api_name": "Account",
+                        "id": "7398333000000728587"
+                      },
+                      "type": "merge_field",
+                      "value": "${!Deals.Account_Name}"
+                    },
+                    {
+                      "field": {
+                        "api_name": "Deal_Amount",
+                        "id": "7398333000000728624"
+                      },
+                      "type": "merge_field",
+                      "value": "${!Deals.Amount}"
+                    },
+                    {
+                      "field": {
+                        "api_name": "Review_Status",
+                        "id": "7398333000000728644"
+                      },
+                      "type": "static",
+                      "value": "Pending Review"
+                    },
+                    {
+                      "field": {
+                        "api_name": "Risk_Type",
+                        "id": "7398333000000728607"
+                      },
+                      "type": "static",
+                      "value": [
+                        "Financial Risk",
+                        "Support Risk"
+                      ]
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "7398333000000766001",
+                "type": "email_notifications"
+              }
+            ]
+          },
+          "criteria_details": {
+            "criteria": null,
+            "relational_criteria": null
+          }
+        }
+      ]
+    }
+  ]
+}

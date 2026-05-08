@@ -1,0 +1,24 @@
+{
+    "field_updates": [
+        {
+              "module": {
+                "api_name": "Deals",
+                "id": "7398333000000002181"
+            },
+            "related_module": null,
+            "type": "static",
+            "feature_type": "connected_workflows",
+            "field": {
+                "api_name": "Approval_Status",
+                "id": "7398333000000605812"
+            },
+            "dependent_fields": null,
+            "name": "Deal Risk Review Orchestration",
+            "value": "Approved",
+            "parent_module": {
+                "api_name": "Risk_Reviews",
+                "id": "7398333000000728015"
+            }
+        }
+    ]
+}
