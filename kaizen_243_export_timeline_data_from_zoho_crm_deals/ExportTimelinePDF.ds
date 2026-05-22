@@ -2,8 +2,6 @@ string button.ExportTimelinePDF(String dealId,String dealName)
 {
 info "FUNCTION START";
 dealId = dealId.toLong();
-dealResp = zoho.crm.getRecordById("Deals",dealId);
-dealName = ifnull(dealResp.get("Deal_Name"),"");
 baseUrl = "https://www.zohoapis.com/crm/v8/Deals/" + dealId + "/__timeline";
 // HTML START
 html = "";
