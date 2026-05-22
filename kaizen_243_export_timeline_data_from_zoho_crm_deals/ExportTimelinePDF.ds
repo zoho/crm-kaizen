@@ -1,0 +1,273 @@
+string button.ExportTimelinePDF(String dealId,String dealName)
+{
+info "FUNCTION START";
+dealId = dealId.toLong();
+dealResp = zoho.crm.getRecordById("Deals",dealId);
+dealName = ifnull(dealResp.get("Deal_Name"),"");
+baseUrl = "https://www.zohoapis.com/crm/v8/Deals/" + dealId + "/__timeline";
+// HTML START
+html = "";
+html = html + "<html>";
+html = html + "<head>";
+html = html + "<style>";
+html = html + "body {";
+html = html + "font-family: Arial, sans-serif;";
+html = html + "font-size: 11px;";
+html = html + "margin: 15px;";
+html = html + "}";
+html = html + "h2 {";
+html = html + "margin-bottom: 15px;";
+html = html + "}";
+html = html + "table {";
+html = html + "border-collapse: collapse;";
+html = html + "width: 100%;";
+html = html + "}";
+html = html + "th, td {";
+html = html + "border: 1px solid #000;";
+html = html + "padding: 5px;";
+html = html + "text-align: left;";
+html = html + "vertical-align: top;";
+html = html + "}";
+html = html + "th {";
+html = html + "background-color: #d9d9d9;";
+html = html + "font-weight: bold;";
+html = html + "}";
+html = html + "</style>";
+html = html + "</head>";
+html = html + "<body>";
+html = html + "<h2>Deal Timeline - " + dealName + "</h2>";
+html = html + "<table>";
+html = html + "<tr>";
+html = html + "<th>Date Time</th>";
+html = html + "<th>User</th>";
+html = html + "<th>Action</th>";
+html = html + "<th>Field</th>";
+html = html + "<th>Old Value</th>";
+html = html + "<th>New Value</th>";
+html = html + "</tr>";
+nextPageToken = "";
+moreRecords = true;
+pageNumbers = "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15".toList(",");
+for each  page in pageNumbers
+{
+	if(moreRecords == true)
+	{
+		paramMap = Map();
+		paramMap.put("sort_by","audited_time");
+		if(nextPageToken == "")
+		{
+			paramMap.put("per_page","200");
+		}
+		else
+		{
+			paramMap.put("page_token",nextPageToken);
+		}
+		timelineResp = invokeurl
+		[
+			url :baseUrl
+			type :GET
+			parameters:paramMap
+			connection:"crm_oauth_connection"
+		];
+		timelineList = timelineResp.get("__timeline");
+		if(timelineList != null)
+		{
+			for each  item in timelineList
+			{
+				// FORMAT DATETIME
+				auditedTimeRaw = ifnull(item.get("audited_time"),"");
+				auditedTime = auditedTimeRaw;
+				if(auditedTimeRaw != "")
+				{
+					auditedTime = auditedTimeRaw.subString(0,19);
+					auditedTime = auditedTime.replaceAll("T"," ");
+				}
+				action = ifnull(item.get("action"),"");
+				doneBy = "";
+				if(item.containsKey("done_by"))
+				{
+					doneMap = item.get("done_by");
+					if(doneMap != null)
+					{
+						doneBy = ifnull(doneMap.get("name"),"");
+					}
+				}
+				// HTML ESCAPE
+				doneBy = doneBy.replaceAll("<","&lt;");
+				doneBy = doneBy.replaceAll(">","&gt;");
+				action = action.replaceAll("<","&lt;");
+				action = action.replaceAll(">","&gt;");
+				fieldHistoryList = item.get("field_history");
+				// =========================================
+				// FIELD HISTORY EXISTS
+				// =========================================
+				if(fieldHistoryList != null)
+				{
+					rowSpanCount = fieldHistoryList.size();
+					rowIndex = 0;
+					for each  fh in fieldHistoryList
+					{
+						rowIndex = rowIndex + 1;
+						fieldLabel = ifnull(fh.get("field_label"),"");
+						if(fieldLabel == "")
+						{
+							fieldLabel = ifnull(fh.get("api_name"),"");
+						}
+						oldValue = "";
+						newValue = "";
+						valueMap = fh.get("_value");
+						if(valueMap != null)
+						{
+							if(valueMap.containsKey("old"))
+							{
+								oldValue = ifnull(valueMap.get("old"),"");
+							}
+							if(valueMap.containsKey("new"))
+							{
+								newValue = ifnull(valueMap.get("new"),"");
+							}
+							if(valueMap.containsKey("added"))
+							{
+								addedValue = valueMap.get("added");
+								if(addedValue != null)
+								{
+									newValue = addedValue.toString();
+								}
+							}
+							if(valueMap.containsKey("removed"))
+							{
+								removedValue = valueMap.get("removed");
+								if(removedValue != null)
+								{
+									oldValue = removedValue.toString();
+								}
+							}
+						}
+						oldValue = ifnull(oldValue,"");
+						newValue = ifnull(newValue,"");
+						// HTML ESCAPE
+						fieldLabel = fieldLabel.replaceAll("<","&lt;");
+						fieldLabel = fieldLabel.replaceAll(">","&gt;");
+						oldValue = oldValue.toString().replaceAll("<","&lt;");
+						oldValue = oldValue.toString().replaceAll(">","&gt;");
+						newValue = newValue.toString().replaceAll("<","&lt;");
+						newValue = newValue.toString().replaceAll(">","&gt;");
+						html = html + "<tr>";
+						// FIRST ROW ONLY
+						if(rowIndex == 1)
+						{
+							html = html + "<td rowspan='" + rowSpanCount + "'>" + auditedTime + "</td>";
+							html = html + "<td rowspan='" + rowSpanCount + "'>" + doneBy + "</td>";
+							html = html + "<td rowspan='" + rowSpanCount + "'>" + action + "</td>";
+						}
+						html = html + "<td>" + fieldLabel + "</td>";
+						html = html + "<td>" + oldValue + "</td>";
+						html = html + "<td>" + newValue + "</td>";
+						html = html + "</tr>";
+					}
+				}
+				else
+				{
+					// =========================================
+					// NON FIELD HISTORY EVENTS
+					// =========================================
+					recordName = "";
+					recordModule = "";
+					if(item.containsKey("record"))
+					{
+						recordMap = item.get("record");
+						if(recordMap != null)
+						{
+							recordName = ifnull(recordMap.get("name"),"");
+							moduleMap = recordMap.get("module");
+							if(moduleMap != null)
+							{
+								recordModule = ifnull(moduleMap.get("api_name"),"");
+							}
+						}
+					}
+					fieldLabel = recordModule;
+					oldValue = "";
+					if(recordName != "")
+					{
+						newValue = recordName;
+					}
+					else
+					{
+						newValue = action;
+					}
+					fieldLabel = fieldLabel.replaceAll("<","&lt;");
+					fieldLabel = fieldLabel.replaceAll(">","&gt;");
+					newValue = newValue.replaceAll("<","&lt;");
+					newValue = newValue.replaceAll(">","&gt;");
+					html = html + "<tr>";
+					html = html + "<td>" + auditedTime + "</td>";
+					html = html + "<td>" + doneBy + "</td>";
+					html = html + "<td>" + action + "</td>";
+					html = html + "<td>" + fieldLabel + "</td>";
+					html = html + "<td>" + oldValue + "</td>";
+					html = html + "<td>" + newValue + "</td>";
+					html = html + "</tr>";
+				}
+			}
+		}
+		// PAGINATION
+		infoMap = timelineResp.get("info");
+		if(infoMap != null && infoMap.get("more_records") == true)
+		{
+			nextPageToken = ifnull(infoMap.get("next_page_token"),"");
+			if(nextPageToken == "")
+			{
+				moreRecords = false;
+			}
+		}
+		else
+		{
+			moreRecords = false;
+		}
+	}
+}
+html = html + "</table>";
+html = html + "</body>";
+html = html + "</html>";
+// CREATE HTML FILE
+htmlFile = html.toFile("timeline.html");
+// UPLOAD TO WRITER
+uploadResp = invokeurl
+[
+	url :"https://writer.zoho.com/api/v1/documents"
+	type :POST
+	files:htmlFile
+	connection:"writer_oauth_connection"
+];
+documentId = "";
+if(uploadResp != null)
+{
+	if(uploadResp.containsKey("document_id"))
+	{
+		documentId = uploadResp.get("document_id");
+	}
+}
+if(documentId != "")
+{
+	// DOWNLOAD AS PDF
+	pdfFile = invokeurl
+	[
+		url :"https://writer.zoho.com/writer/api/v1/download/" + documentId + "?format=pdf"
+		type :GET
+		connection:"writer_oauth_connection"
+	];
+	if(pdfFile != null)
+	{
+		attachResp = zoho.crm.attachFile("Deals",dealId,pdfFile);
+		if(attachResp != null)
+		{
+			if(attachResp.get("status") == "success")
+			{
+				return "Timeline PDF attached successfully";
+			}
+		}
+	}
+}
+return "PDF generation failed";
+}
