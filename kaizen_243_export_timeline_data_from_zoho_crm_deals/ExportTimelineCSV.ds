@@ -1,0 +1,185 @@
+string button.ExportTimelineCSV(String dealId, String dealName)
+{
+dealId = dealId.toLong();
+baseUrl = "https://www.zohoapis.com/crm/v8/Deals/" + dealId + "/__timeline";
+lineBreak = hexToText("0D") + hexToText("0A");
+csvText = "";
+csvText = "Date Time,User,Action,Field,Old Value,New Value" + lineBreak;
+// pagination variables
+nextPageToken = "";
+moreRecords = true;
+// Deluge does not support while loop
+// using fixed iteration loop with break condition
+pageNumbers = "1,2,3,4,5,6,7,8,9,10".toList(",");
+for each  page in pageNumbers
+{
+	if(moreRecords == false)
+	{
+		break;
+	}
+	paramMap = Map();
+	paramMap.put("sort_by","audited_time");
+	// FIRST PAGE
+	if(nextPageToken == "")
+	{
+		paramMap.put("per_page","200");
+	}
+	else
+	{
+		paramMap.put("page_token",nextPageToken);
+	}
+	timelineResp = invokeurl
+	[
+		url :baseUrl
+		type :GET
+		parameters:paramMap
+		connection:"crm_oauth_connection"
+	];
+	info timelineResp;
+	timelineList = timelineResp.get("__timeline");
+	if(timelineList != null)
+	{
+		for each  item in timelineList
+		{
+			auditedTime = ifnull(item.get("audited_time"),"");
+			action = ifnull(item.get("action"),"");
+			doneBy = "";
+			if(item.containsKey("done_by"))
+			{
+				doneMap = item.get("done_by");
+				if(doneMap != null)
+				{
+					doneBy = ifnull(doneMap.get("name"),"");
+				}
+			}
+			// CSV escape
+			doneBy = doneBy.toString().replaceAll("\"","\"\"",true);
+			fieldHistoryList = item.get("field_history");
+			// FIELD HISTORY EXISTS
+			if(fieldHistoryList != null)
+			{
+				for each  fh in fieldHistoryList
+				{
+					// field label fallback
+					fieldLabel = ifnull(fh.get("field_label"),"");
+					if(fieldLabel == "")
+					{
+						fieldLabel = ifnull(fh.get("api_name"),"");
+					}
+					oldValue = "";
+					newValue = "";
+					valueMap = fh.get("_value");
+					if(valueMap != null)
+					{
+						// STANDARD OLD/NEW
+						if(valueMap.containsKey("old"))
+						{
+							oldValue = ifnull(valueMap.get("old"),"");
+						}
+						if(valueMap.containsKey("new"))
+						{
+							newValue = ifnull(valueMap.get("new"),"");
+						}
+						// MULTI SELECT / TERRITORY SUPPORT
+						if(valueMap.containsKey("added"))
+						{
+							addedValue = valueMap.get("added");
+							if(addedValue != null)
+							{
+								newValue = addedValue.toString();
+							}
+						}
+						if(valueMap.containsKey("removed"))
+						{
+							removedValue = valueMap.get("removed");
+							if(removedValue != null)
+							{
+								oldValue = removedValue.toString();
+							}
+						}
+					}
+					oldValue = ifnull(oldValue,"");
+					newValue = ifnull(newValue,"");
+					// CSV escape
+					fieldLabel = fieldLabel.toString().replaceAll("\"","\"\"",true);
+					oldValue = oldValue.toString().replaceAll("\"","\"\"",true);
+					newValue = newValue.toString().replaceAll("\"","\"\"",true);
+					row = "\"" + auditedTime + "\",";
+					row = row + "\"" + doneBy + "\",";
+					row = row + "\"" + action + "\",";
+					row = row + "\"" + fieldLabel + "\",";
+					row = row + "\"" + oldValue + "\",";
+					row = row + "\"" + newValue + "\"";
+					csvText = csvText + row + lineBreak;
+				}
+			}
+			else
+			{
+				// NON FIELD-HISTORY EVENTS
+				recordName = "";
+				recordModule = "";
+				if(item.containsKey("record"))
+				{
+					recordMap = item.get("record");
+					if(recordMap != null)
+					{
+						recordName = ifnull(recordMap.get("name"),"");
+						moduleMap = recordMap.get("module");
+						if(moduleMap != null)
+						{
+							recordModule = ifnull(moduleMap.get("api_name"),"");
+						}
+					}
+				}
+				fieldLabel = recordModule;
+				oldValue = "";
+				if(recordName != "")
+				{
+					newValue = recordName;
+				}
+				else
+				{
+					newValue = action;
+				}
+				// CSV escape
+				fieldLabel = fieldLabel.toString().replaceAll("\"","\"\"",true);
+				newValue = newValue.toString().replaceAll("\"","\"\"",true);
+				row = "\"" + auditedTime + "\",";
+				row = row + "\"" + doneBy + "\",";
+				row = row + "\"" + action + "\",";
+				row = row + "\"" + fieldLabel + "\",";
+				row = row + "\"" + oldValue + "\",";
+				row = row + "\"" + newValue + "\"";
+				csvText = csvText + row + lineBreak;
+			}
+		}
+	}
+	// PAGINATION
+	infoMap = timelineResp.get("info");
+	if(infoMap != null && infoMap.get("more_records") == true)
+	{
+		nextPageToken = ifnull(infoMap.get("next_page_token"),"");
+		if(nextPageToken == "")
+		{
+			moreRecords = false;
+		}
+	}
+	else
+	{
+		moreRecords = false;
+	}
+}
+fileName = dealName.replaceAll(" ","_",true) + "_Timeline.csv";
+fileObject = csvText.toFile(fileName);
+info fileObject;
+attachResp = zoho.crm.attachFile("Deals",dealId,fileObject);
+info attachResp;
+if(attachResp != null)
+{
+	if(attachResp.get("status") == "success")
+	{
+		return "Timeline CSV attached successfully";
+	}
+}
+return fileObject;
+}
