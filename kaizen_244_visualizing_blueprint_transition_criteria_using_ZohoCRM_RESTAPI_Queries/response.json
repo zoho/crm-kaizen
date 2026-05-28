@@ -1,0 +1,23 @@
+[
+  {
+    "current_state": "Under Review",
+    "transition_name": "Send For Verification",
+    "next_state": "Verification Pending",
+    "criteria_matched": "false",
+    "criteria": "( ( Credit Score < 750 OR Fraud Check Status is Pending ) OR Risk Category is High )"
+  },
+  {
+    "current_state": "Under Review",
+    "transition_name": "Reject Loan",
+    "next_state": "Rejected",
+    "criteria_matched": "false",
+    "criteria": "( ( Fraud Check Status is Failed OR Risk Category is High ) OR Credit Score < 500 )"
+  },
+  {
+    "current_state": "Under Review",
+    "transition_name": "Approve Loan",
+    "next_state": "Approved",
+    "criteria_matched": "false",
+    "criteria": "( ( ( ( ( ( ( ( ( Loan Amount > 500000 AND Credit Score > 750 ) AND ( Customer Type is Premium OR Existing Customer is true ) ) AND ( Risk Category is Low OR Eligibility Score > 80 ) ) AND KYC Verified is true ) AND PAN Verified is true ) AND Income Tax Verified is true ) AND Fraud Check Status is Passed ) AND Manager Approval is true ) AND Compliance Approval is true )"
+  }
+]
