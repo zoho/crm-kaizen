@@ -1,0 +1,44 @@
+string standalone.Stripe(Map crmAPIRequest)
+{
+payload = crmAPIRequest.get("body");
+sessionData = payload.get("data").get("object");
+amountTotal = sessionData.get("amount_total");
+customerEmail = sessionData.get("customer_email");
+metadataMap = sessionData.get("metadata");
+metadata = metadataMap.get("cart_items");
+createdTime = sessionData.get("created");
+expiresAt = sessionData.get("expires_at");
+info "Total Amount: " + amountTotal;
+info "Customer Email: " + customerEmail;
+info "Metadata: " + metadata;
+info "Created Time: " + createdTime;
+info "Expires At: " + expiresAt;
+data = Map();
+data.put("cart_items",metadata);
+data.put("created",createdTime);
+data.put("expires_at",expiresAt);
+data.put("total_amount",amountTotal);
+info data;
+amount_Total = amountTotal;
+if(amount_Total > 50000)
+{
+	signalMap = Map();
+	signalMap.put("signal_namespace","stripe_cart");
+	signalMap.put("data",data);
+	signalMap.put("email",customerEmail);
+	signalMap.put("subject","High-Value Cart Abandoned");
+	message = "*High-value customer alert!* ~br~ " + "A customer has abandoned a checkout session worth " + "75000" + ". ~br~ " + "Please follow up immediately to recover this opportunity.";
+	signalMap.put("message",message);
+	actionsList = List();
+	actionMap = Map();
+	actionMap.put("type","link");
+	actionMap.put("open_in","popup");
+	actionMap.put("display_name","View Products");
+	actionMap.put("url","https://crm.zoho.in/crm/org60047836195/tab/Products/");
+	actionsList.add(actionMap);
+	signalMap.put("actions",actionsList);
+	resp = zoho.crm.raiseSignal(signalMap);
+	info resp;
+}
+return "success";
+}

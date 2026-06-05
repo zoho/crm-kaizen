@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Stripe Checkout Cart</title>
+  <script src="https://live.zwidgets.com/js-sdk/1.5/ZohoEmbededAppSDK.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 16px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      color: #2f3a4a;
+      background: #fff;
+    }
+    .section-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: #1f2d3d;
+      margin: 0 0 8px 0;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .header {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px 24px;
+      margin-bottom: 16px;
+      padding: 12px 16px;
+      background: #f5f8fc;
+      border: 1px solid #e3e9f1;
+      border-radius: 6px;
+    }
+    .header-item { font-size: 13px; }
+    .header-item .label {
+      display: block;
+      color: #6b7a8f;
+      font-weight: 500;
+      margin-bottom: 2px;
+    }
+    .header-item .value {
+      color: #1f2d3d;
+      font-weight: 600;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    th, td {
+      text-align: left;
+      padding: 10px 12px;
+      border-bottom: 1px solid #e3e9f1;
+    }
+    th {
+      background: #f5f8fc;
+      color: #4a5a72;
+      font-weight: 600;
+      text-transform: uppercase;
+      font-size: 12px;
+      letter-spacing: 0.4px;
+    }
+    tbody tr:hover { background: #fafbfd; }
+    td a {
+      color: #1d7afc;
+      text-decoration: none;
+      font-weight: 500;
+    }
+    td a:hover { text-decoration: underline; }
+    .qty { text-align: right; width: 100px; }
+    .state {
+      padding: 24px;
+      text-align: center;
+      color: #6b7a8f;
+      font-size: 14px;
+    }
+    .state.error { color: #c92a2a; }
+    @media (max-width: 600px) {
+      body { padding: 12px; }
+      .header { flex-direction: column; gap: 8px; }
+      th, td { padding: 8px; font-size: 13px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="root">
+    <div class="state" id="state">Loading cart…</div>
+  </div>
+
+  <script>
+    // ===== Configuration =====
+    var ORG_PRODUCT_URL = "https://crm.zoho.in/crm/org60047836195/tab/Products/";
+    var CACHE_PREFIX = "stripe_cart_widget_payload:";
+
+    function buildCacheKey(data) {
+      var sig = (data && data.signal && data.signal.id) || "nosig";
+      var rec = (data && data.record && data.record.id) || "norec";
+      return CACHE_PREFIX + sig + ":" + rec;
+    }
+
+    function cachePayload(key, payload) {
+      try { sessionStorage.setItem(key, JSON.stringify(payload)); } catch (e) {}
+    }
+
+    function readCachedPayload(key) {
+      try {
+        var raw = sessionStorage.getItem(key);
+        return raw ? JSON.parse(raw) : null;
+      } catch (e) { return null; }
+    }
+
+    // ===== Helpers =====
+    function setState(msg, isError) {
+      var el = document.getElementById("state");
+      var root = document.getElementById("root");
+      root.innerHTML = '<div class="state ' + (isError ? "error" : "") + '">' + escapeHtml(msg) + "</div>";
+    }
+
+    function escapeHtml(str) {
+      if (str === null || str === undefined) return "";
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    function formatUnix(ts) {
+      if (ts === null || ts === undefined || ts === "") return "—";
+      var n = Number(ts);
+      if (!isFinite(n)) return String(ts);
+      // Treat values < 1e12 as seconds; otherwise milliseconds.
+      var ms = n < 1e12 ? n * 1000 : n;
+      var d = new Date(ms);
+      if (isNaN(d.getTime())) return String(ts);
+      return d.toLocaleString();
+    }
+
+    /**
+     * Parses cart payload. Accepts:
+     *  - Proper JSON: [{"product":"X","quantity":1}, ...]
+     *  - Loose JS-like: [{product:CNC Machine,quantity:1},{product:Laser Cutter,quantity:2}]
+     * Returns [] on any failure.
+     */
+    function parseCart(raw) {
+      if (!raw) return [];
+      if (Array.isArray(raw)) return raw;
+      var str = String(raw).trim();
+      if (!str) return [];
+
+      // Try strict JSON first.
+      try { return JSON.parse(str); } catch (e) {}
+
+      // Normalize loose syntax to JSON.
+      try {
+        var normalized = str
+          // Quote keys (word chars followed by colon).
+          .replace(/([{,]\s*)([A-Za-z_][A-Za-z0-9_]*)\s*:/g, '$1"$2":')
+          // Quote unquoted string values that aren't numbers/booleans/null.
+          .replace(/:\s*([^,{}\[\]"]+?)\s*(?=[,}])/g, function (_, val) {
+            var v = val.trim();
+            if (/^-?\d+(\.\d+)?$/.test(v)) return ": " + v;
+            if (/^(true|false|null)$/i.test(v)) return ": " + v.toLowerCase();
+            return ': "' + v.replace(/"/g, '\\"') + '"';
+          });
+        return JSON.parse(normalized);
+      } catch (e) {
+        console.error("Failed to parse cart payload:", e, raw);
+        return [];
+      }
+    }
+
+    function normalizeItems(items) {
+      return (items || [])
+        .map(function (it) {
+          if (!it) return null;
+          var name = it.product || it.Product || it.name || it.Name || it.product_name;
+          var qty = it.quantity != null ? it.quantity : (it.qty != null ? it.qty : it.Quantity);
+          if (!name) return null;
+          return { product: String(name).trim(), quantity: qty != null ? qty : "" };
+        })
+        .filter(Boolean);
+    }
+
+    async function fetchProductIds(productNames) {
+      var map = {};
+      if (!productNames.length) return map;
+
+      // Deduplicate.
+      var unique = Array.from(new Set(productNames));
+      var quoted = unique.map(function (n) { return "'" + n.replace(/'/g, "\\'") + "'"; }).join(",");
+      var select_query =
+        "select id, Product_Name from Products where Product_Name in (" + quoted + ") limit 200";
+
+      try {
+        var res = await zrc.post("/crm/v8/coql", { select_query: select_query });
+        var rows = (res && res.data && res.data.data) || [];
+        rows.forEach(function (r) { map[r.Product_Name] = r.id; });
+      } catch (err) {
+        console.error("COQL failed:", err);
+      }
+      return map;
+    }
+
+    function formatAmount(amt) {
+      if (amt === null || amt === undefined || amt === "") return "\u2014";
+      var n = Number(amt);
+      if (!isFinite(n)) return String(amt);
+      return n.toLocaleString();
+    }
+
+    function renderHeader(created, expires, totalAmount) {
+      return (
+        '<div class="section">' +
+          '<div class="section-title">Checkout Session</div>' +
+          '<div class="header">' +
+            '<div class="header-item">' +
+              '<span class="label">Start Time</span>' +
+              '<span class="value">' + escapeHtml(formatUnix(created)) + '</span>' +
+            '</div>' +
+            '<div class="header-item">' +
+              '<span class="label">End Time</span>' +
+              '<span class="value">' + escapeHtml(formatUnix(expires)) + '</span>' +
+            '</div>' +
+            '<div class="header-item">' +
+              '<span class="label">Total Amount</span>' +
+              '<span class="value">' + escapeHtml(formatAmount(totalAmount)) + '</span>' +
+            '</div>' +
+          '</div>' +
+        '</div>'
+      );
+    }
+
+    function renderTable(items, idMap) {
+      if (!items.length) {
+        return '<div class="state">No cart items found.</div>';
+      }
+      var rows = items.map(function (it) {
+        var id = idMap[it.product];
+        var nameCell = id
+          ? '<a href="' + ORG_PRODUCT_URL + encodeURIComponent(id) + '" data-product-link="1" rel="noopener noreferrer">' + escapeHtml(it.product) + '</a>'
+          : escapeHtml(it.product);
+        return (
+          '<tr>' +
+            '<td>' + nameCell + '</td>' +
+            '<td class="qty">' + escapeHtml(it.quantity) + '</td>' +
+          '</tr>'
+        );
+      }).join("");
+
+      return (
+        '<table>' +
+          '<thead><tr><th>Product</th><th class="qty">Quantity</th></tr></thead>' +
+          '<tbody>' + rows + '</tbody>' +
+        '</table>'
+      );
+    }
+
+    // Delegate clicks on product links so they open reliably from inside the
+    // widget iframe — both in collapsed and expanded views.
+    document.addEventListener("click", function (e) {
+      var a = e.target.closest && e.target.closest('a[data-product-link]');
+      if (!a) return;
+      e.preventDefault();
+      var url = a.getAttribute("href");
+      try {
+        var w = window.open(url, "_blank", "noopener,noreferrer");
+        if (!w && window.top) window.top.location.href = url;
+      } catch (err) {
+        if (window.top) window.top.location.href = url;
+      }
+    });
+
+    async function loadWidget(payload) {
+      try {
+        var rawCart = payload.cart_items;
+        var created = payload.created;
+        var expires = payload.expires_at;
+        var totalAmount = payload.total_amount;
+
+        var items = normalizeItems(parseCart(rawCart));
+
+        var root = document.getElementById("root");
+
+        var idMap = await fetchProductIds(items.map(function (i) { return i.product; }));
+
+        var data = renderHeader(created, expires, totalAmount) + renderTable(items, idMap);
+
+console.log(data);
+
+        root.innerHTML = data;
+      } catch (err) {
+        console.error("Widget load failed:", err);
+        setState("Failed to load checkout cart. " + (err && err.message ? err.message : ""), true);
+      }
+    }
+
+    /**
+     * Recursively searches the PageLoad payload for an object containing
+     * any of the cart-related keys (cart_items, created, expires_at).
+     * Returns the first matching object, or null.
+     */
+    function findCartPayload(obj) {
+      if (!obj || typeof obj !== "object") return null;
+      if ("cart_items" in obj || "created" in obj || "expires_at" in obj || "total_amount" in obj) return obj;
+      for (var key in obj) {
+        if (!Object.prototype.hasOwnProperty.call(obj, key)) continue;
+        var found = findCartPayload(obj[key]);
+        if (found) return found;
+      }
+      return null;
+    }
+
+    // ===== Init =====
+    ZOHO.embeddedApp.on("PageLoad", function (data) {
+      console.log("PageLoad data:", data);
+      try {
+        console.log("PageLoad data (JSON):", JSON.stringify(data, null, 2));
+      } catch (e) {}
+      var payload = findCartPayload(data);
+
+      if (payload) {
+        loadWidget(payload);
+        return;
+      }
+    });
+
+    ZOHO.embeddedApp.init();
+  </script>
+</body>
+</html>
