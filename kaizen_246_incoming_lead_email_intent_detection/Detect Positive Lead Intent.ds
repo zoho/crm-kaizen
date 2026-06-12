@@ -1,0 +1,401 @@
+void automation.detectPositiveLeadIntent(Int leadId)
+{
+info "Processing Lead ID: " + leadId;
+leadIdLong = leadId.toLong();
+leadIdString = leadId.toString();
+// STEP 1: Get Lead Details
+leadData = zoho.crm.getRecordById("Leads",leadIdLong);
+if(leadData == null)
+{
+	info "Lead not found";
+	return;
+}
+// Extract lead information
+leadName = ifnull(leadData.get("Full_Name"),"");
+if(leadName == "")
+{
+	leadName = ifnull(leadData.get("First_Name"),"") + " " + ifnull(leadData.get("Last_Name"),"");
+}
+leadName = leadName.trim();
+company = ifnull(leadData.get("Company"),"");
+leadEmail = ifnull(leadData.get("Email"),"");
+info "Lead Name: " + leadName;
+info "Company: " + company;
+// STEP 2: Get Owner Details
+ownerName = "";
+ownerEmail = "";
+ownerId = "";
+if(leadData.get("Owner") != null)
+{
+	owner = leadData.get("Owner");
+	ownerName = ifnull(owner.get("name"),"");
+	ownerEmail = ifnull(owner.get("email"),"");
+	ownerId = ifnull(owner.get("id"),"");
+}
+info "Owner Name: " + ownerName;
+info "Owner Email: " + ownerEmail;
+if(ownerEmail == "")
+{
+	info "No owner email found. Cannot proceed.";
+	return;
+}
+// STEP 3: Fetch Lead Emails using CRM API
+emailsResp = invokeurl
+[
+	url :"https://www.zohoapis.com/crm/v8/Leads/" + leadIdString + "/Emails"
+	type :GET
+	connection:"zohocrm"
+];
+if(emailsResp == null || emailsResp.get("Emails") == null)
+{
+	info "No emails found for this lead";
+	return;
+}
+emailsList = emailsResp.get("Emails");
+if(emailsList.size() == 0)
+{
+	info "No emails found for this lead";
+	return;
+}
+info "Total emails fetched: " + emailsList.size();
+// STEP 4: Get latest incoming email
+latestIncomingEmail = null;
+latestEmailDate = null;
+for each  email in emailsList
+{
+	// Get sender email
+	senderEmail = "";
+	fromField = email.get("from");
+	if(fromField != null)
+	{
+		try 
+		{
+			senderEmail = ifnull(fromField.get("email"),"");
+			if(senderEmail == "")
+			{
+				senderEmail = ifnull(fromField.get("address"),"");
+			}
+		}
+		catch (exp)
+		{
+			senderEmail = fromField.toString();
+		}
+	}
+	if(senderEmail == "")
+	{
+		senderEmail = ifnull(email.get("sent_by"),"");
+	}
+	if(senderEmail == "")
+	{
+		senderEmail = ifnull(email.get("From"),"");
+	}
+	// Consider as incoming if sender is not the owner
+	isIncoming = false;
+	if(senderEmail != "" && ownerEmail != "" && senderEmail.toLowerCase() != ownerEmail.toLowerCase())
+	{
+		isIncoming = true;
+	}
+	if(isIncoming)
+	{
+		emailDate = ifnull(email.get("created_time"),"");
+		if(emailDate == "")
+		{
+			emailDate = ifnull(email.get("sent_time"),"");
+		}
+		if(latestIncomingEmail == null)
+		{
+			latestIncomingEmail = email;
+			latestEmailDate = emailDate;
+		}
+		else if(emailDate != "" && latestEmailDate != "" && emailDate > latestEmailDate)
+		{
+			latestIncomingEmail = email;
+			latestEmailDate = emailDate;
+		}
+	}
+}
+if(latestIncomingEmail == null)
+{
+	info "No incoming emails found";
+	return;
+}
+// Extract email subject and sender
+emailSubject = ifnull(latestIncomingEmail.get("subject"),"");
+if(emailSubject == "")
+{
+	emailSubject = ifnull(latestIncomingEmail.get("title"),"");
+}
+customerEmail = "";
+fromField = latestIncomingEmail.get("from");
+if(fromField != null)
+{
+	try 
+	{
+		customerEmail = ifnull(fromField.get("email"),"");
+	}
+	catch (exp)
+	{
+		customerEmail = fromField.toString();
+	}
+}
+if(customerEmail == "")
+{
+	customerEmail = ifnull(latestIncomingEmail.get("sent_by"),"");
+}
+info "Processing email - Subject: " + emailSubject;
+info "From: " + customerEmail;
+// Fetch full email body
+messageId = latestIncomingEmail.get("message_id");
+if(messageId == "")
+{
+	messageId = latestIncomingEmail.get("id");
+}
+emailBody = "";
+if(messageId != "")
+{
+	emailDetailResp = invokeurl
+	[
+		url :"https://www.zohoapis.com/crm/v8/Leads/" + leadIdString + "/Emails/" + messageId
+		type :GET
+		connection:"zohocrm"
+	];
+	if(emailDetailResp != null && emailDetailResp.get("Emails") != null)
+	{
+		emailDetails = emailDetailResp.get("Emails");
+		if(emailDetails.size() > 0)
+		{
+			emailBody = ifnull(emailDetails.get(0).get("content"),"");
+			if(emailBody == "")
+			{
+				emailBody = ifnull(emailDetails.get(0).get("body"),"");
+			}
+		}
+	}
+}
+if(emailBody == "")
+{
+	emailBody = ifnull(latestIncomingEmail.get("content"),"");
+}
+if(emailBody == "")
+{
+	emailBody = emailSubject;
+}
+// Clean HTML tags
+cleanBody = emailBody.replaceAll("<[^>]*>","",true);
+cleanBody = cleanBody.replaceAll("&nbsp;"," ",true);
+cleanBody = cleanBody.replaceAll("&amp;","&",true);
+cleanBody = cleanBody.replaceAll("\\s+"," ",true);
+cleanBody = cleanBody.trim();
+// Limit body length (Zia has token limits)
+if(cleanBody.length() > 1500)
+{
+	cleanBody = cleanBody.subString(0,1500);
+}
+info "Email body cleaned. Length: " + cleanBody.length();
+if(cleanBody == "" || cleanBody.length() < 10)
+{
+	info "Email body too short for analysis";
+	return;
+}
+// STEP 5: Call Zia API for Intent Analysis - FIXED VERSION
+// Create a simple prompt for Zia. Please note that the strong prompt helps Zia to detect the prompt. 
+analysisPrompt = "Analyze this sales email and respond with ONLY 'YES' or 'NO'. Does this email show PURCHASE_INTENT? Purchase intent means the lead wants to buy, get pricing, schedule demo, or start trial.\n\nSubject: " + emailSubject + "\n\nEmail: " + cleanBody;
+
+// analysisPrompt = "You are an enterprise-grade B2B sales intent detection AI. Analyze the incoming lead email and determine whether the customer shows strong and genuine PURCHASE_INTENT. Strong purchase intent includes asking for pricing, quotation, demo, free trial, implementation, onboarding, integrations, contract discussion, deployment timelines, budget approval, commercial discussion, next steps, or clear evaluation of the product for business adoption. Ignore greetings, thank you emails, support requests, informational questions, casual discussions, or unrelated conversations. Respond ONLY with YES if the lead is highly likely to purchase or actively evaluate the product for buying decision. Otherwise respond ONLY with NO.\n\nSubject: " + emailSubject + "\n\nEmail Content: " + cleanBody;
+//Give a strong prompt to detect positive email sentiments.
+
+
+// Create Zia assistant payload
+ziaPayload = Map();
+ziaPayload.put("prompt",analysisPrompt);
+// Add chat history
+chatHistoryList = List();
+chatMessage = Map();
+chatMessage.put("role","user");
+chatMessage.put("content",analysisPrompt);
+chatHistoryList.add(chatMessage);
+ziaPayload.put("chat_history",chatHistoryList);
+// Add prompt settings
+promptSettingsMap = Map();
+promptSettingsMap.put("length","Single Sentence");
+promptSettingsMap.put("style","Professional");
+promptSettingsMap.put("language","en");
+promptSettingsMap.put("tone","Neutral");
+ziaPayload.put("prompt_settings",promptSettingsMap);
+// Create final request payload
+requestPayload = Map();
+requestPayload.put("assistant",ziaPayload);
+info "Calling Zia API...";
+ziaResponse = invokeurl
+[
+	url :"https://www.zohoapis.com/crm/v8/zia/smart_prompt/assistant"
+	type :POST
+	parameters:requestPayload.toString()
+	headers:{"Content-Type":"application/json"}
+	connection:"zohocrm"
+];
+info "Zia API Response Code received";
+// STEP 6: Parse AI Response
+hasPurchaseIntent = false;
+aiResponse = "";
+if(ziaResponse != null)
+{
+	info "Response keys: " + ziaResponse.keys();
+	// Try different response structures
+	if(ziaResponse.get("assistant") != null)
+	{
+		assistantData = ziaResponse.get("assistant");
+		if(assistantData.get("details") != null)
+		{
+			details = assistantData.get("details");
+			if(details.get("data") != null)
+			{
+				aiResponse = details.get("data");
+			}
+			else if(details.get("response") != null)
+			{
+				aiResponse = details.get("response");
+			}
+			else if(details.get("message") != null)
+			{
+				aiResponse = details.get("message");
+			}
+		}
+		else if(assistantData.get("response") != null)
+		{
+			aiResponse = assistantData.get("response");
+		}
+		else if(assistantData.get("data") != null)
+		{
+			aiResponse = assistantData.get("data");
+		}
+	}
+	else if(ziaResponse.get("data") != null)
+	{
+		aiResponse = ziaResponse.get("data");
+	}
+	else if(ziaResponse.get("response") != null)
+	{
+		aiResponse = ziaResponse.get("response");
+	}
+	if(aiResponse != "")
+	{
+		aiResponse = aiResponse.trim().toUpperCase();
+		info "AI Response: " + aiResponse;
+		if(aiResponse.contains("YES"))
+		{
+			hasPurchaseIntent = true;
+		}
+	}
+	else
+	{
+		info "No response data found in Zia response";
+		info "Full response: " + ziaResponse.toString();
+	}
+}
+else
+{
+	info "Zia response is null";
+}
+// STEP 7: If Purchase Intent detected, take actions
+if(hasPurchaseIntent)
+{
+	info "✅ PURCHASE INTENT DETECTED for lead: " + leadName;
+	// Prepare snippets
+	emailSnippet = cleanBody;
+	if(cleanBody.length() > 500)
+	{
+		emailSnippet = cleanBody.subString(0,500);
+	}
+	noteContent = cleanBody;
+	if(cleanBody.length() > 400)
+	{
+		noteContent = cleanBody.subString(0,400);
+	}
+	emailPreview = cleanBody;
+	if(cleanBody.length() > 300)
+	{
+		emailPreview = cleanBody.subString(0,300);
+	}
+	// i. Update Lead Fields
+	updateMap = Map();
+	updateMap.put("Hot_Lead_Flag",true);
+	updateMap.put("Lead_Status","Interested");
+	updateMap.put("Rating","Hot");
+	updateMap.put("Email_Intent","Purchase_Intent");
+	updateMap.put("Intent_Detected_Time",zoho.currenttime.toString("yyyy-MM-dd'T'HH:mm:ssXXX"));
+	updateResponse = zoho.crm.updateRecord("Leads",leadIdLong,updateMap);
+	info "Lead fields updated";
+	// ii. Create high priority task
+	taskMap = Map();
+	taskMap.put("Subject","🔥 HOT LEAD: " + leadName + " wants to buy! Follow up NOW");
+	taskMap.put("Owner",ownerId);
+	taskMap.put("What_Id",leadIdLong);
+	taskMap.put("se_module","Leads");
+	taskMap.put("Priority","High");
+	taskMap.put("Status","Not Started");
+	taskMap.put("Due_Date",zoho.currentdate.toString("yyyy-MM-dd"));
+	taskMap.put("Description","Zia detected PURCHASE INTENT in email from lead.\n\n" + "Lead: " + leadName + "\n" + "Company: " + company + "\n" + "Email: " + customerEmail + "\n" + "Subject: " + emailSubject + "\n\n" + "Email snippet:\n" + emailSnippet + "\n\n" + "--- ACTION REQUIRED ---\n" + "This lead is ready to buy. Respond immediately!");
+	taskResponse = zoho.crm.createRecord("Tasks",taskMap);
+	info "High priority task created";
+	// iii. Add note
+	noteMap = Map();
+	noteMap.put("Note_Title","Zia: Purchase Intent Detected");
+	noteMap.put("Note_Content","Purchase intent detected on: " + zoho.currenttime.toString("dd MMM yyyy, hh:mm a") + "\n\n" + "From: " + customerEmail + "\n" + "Subject: " + emailSubject + "\n\n" + "Key content:\n" + noteContent + "\n\n" + "Action: Task created for immediate follow-up.");
+	noteMap.put("Parent_Id",leadIdLong);
+	noteMap.put("se_module","Leads");
+	noteResponse = zoho.crm.createRecord("Notes",noteMap);
+	info "Audit note added";
+	// iv. Send alert email to owner
+	emailHtml = "<div style='font-family:Arial,sans-serif;max-width:600px;'>";
+	emailHtml = emailHtml + "<h2 style='color:#d32f2f;'>🔥 Hot Lead Alert - Purchase Intent Detected!</h2>";
+	emailHtml = emailHtml + "<p>Hi " + ownerName + ",</p>";
+	emailHtml = emailHtml + "<p><b>Good news!</b> Zia has detected strong purchase intent from one of your leads.</p>";
+	emailHtml = emailHtml + "<table style='border-collapse:collapse;width:100%;margin:16px 0;'>";
+	emailHtml = emailHtml + "<tr><td style='padding:8px;border:1px solid #ddd;background:#f9f9f9;'><b>Lead Name</b></td><td style='padding:8px;border:1px solid #ddd;'>" + leadName;
+	emailHtml = emailHtml + "<tr><td style='padding:8px;border:1px solid #ddd;background:#f9f9f9;'><b>Company</b></td><td style='padding:8px;border:1px solid #ddd;'>" + company;
+	emailHtml = emailHtml + "<tr><td style='padding:8px;border:1px solid #ddd;background:#f9f9f9;'><b>Email</b></td><td style='padding:8px;border:1px solid #ddd;'>" + customerEmail;
+	emailHtml = emailHtml + "<tr><td style='padding:8px;border:1px solid #ddd;background:#f9f9f9;'><b>Subject</b></td><td style='padding:8px;border:1px solid #ddd;'>" + emailSubject;
+	emailHtml = emailHtml + "</table>";
+	emailHtml = emailHtml + "<h3>Email Excerpt:</h3>";
+	emailHtml = emailHtml + "<p style='background:#f5f5f5;padding:12px;border-radius:4px;'>" + emailPreview + "...</p>";
+	emailHtml = emailHtml + "<p><b>✅ Actions Taken:</b> Lead marked as Hot, Status: Interested, Task created.</p>";
+	emailHtml = emailHtml + "<p><b>📌 Next Steps:</b> Respond to this lead within 1 hour.</p>";
+	emailHtml = emailHtml + "<br/><a href='https://crm.zoho.com/crm/tab/Leads/" + leadIdString + "' style='background:#d32f2f;color:white;padding:10px 20px;text-decoration:none;border-radius:4px;'>Open Lead Record</a>";
+	emailHtml = emailHtml + "</div>";
+	sendmail
+	[
+		from :zoho.loginuserid
+		to :ownerEmail
+		subject :"🔥 HOT LEAD ALERT: " + leadName + " wants to buy!"
+		message :emailHtml
+	]
+	info "Alert email sent to owner: " + ownerEmail;
+	// v. Auto-reply to lead
+	if(leadEmail != "" && leadEmail != null)
+	{
+		autoReplyHtml = "<div style='font-family:Arial,sans-serif;'>";
+		autoReplyHtml = autoReplyHtml + "<h3>Thank you for your interest!</h3>";
+		autoReplyHtml = autoReplyHtml + "<p>Dear " + leadName + ",</p>";
+		autoReplyHtml = autoReplyHtml + "<p>Thank you for reaching out to us. We've received your email and our team is reviewing it.</p>";
+		autoReplyHtml = autoReplyHtml + "<p><b>One of our representatives will get back to you within 1 hour.</b></p>";
+		autoReplyHtml = autoReplyHtml + "<p>We appreciate your interest in our solutions.</p>";
+		autoReplyHtml = autoReplyHtml + "<br/><p>Best regards,<br/>" + company + " Team</p>";
+		autoReplyHtml = autoReplyHtml + "</div>";
+		sendmail
+		[
+			from :zoho.loginuserid
+			to :leadEmail
+			subject :"Thank you for your interest - We'll follow up shortly"
+			message :autoReplyHtml
+		]
+		info "Auto-reply sent to lead: " + leadEmail;
+	}
+	info "All purchase intent actions completed successfully";
+}
+else
+{
+	info "No purchase intent detected. No actions taken.";
+	info "AI Response was: " + aiResponse;
+}
+}
