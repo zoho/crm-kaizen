@@ -1,0 +1,215 @@
+string standalone.cleanupDuplicateGroup(String emailValue)
+{
+    queryMap = Map();
+    queryMap.put("select_query",
+        "select id, Created_Time, Company, Phone, Website, Email " +
+        "from Leads where Email = '" + emailValue + "' " +
+        "order by Created_Time asc " +
+        "limit 200");
+
+    response = invokeurl
+    [
+        url: "https://www.zohoapis.com/crm/v8/coql"
+        type: POST
+        parameters: queryMap.toString()
+        connection: "crm_oauth_connection"
+    ];
+
+    records = response.get("data");
+    groupEmail = emailValue;
+
+    if(records == null || records.size() <= 1)
+    {
+        return "No duplicates found";
+    }
+
+    // ==========================================
+    // MASTER SELECTION
+    // ==========================================
+    masterRecord = null;
+    masterScore  = -1;
+
+    for each record in records
+    {
+        score = 0;
+        if(ifnull(record.get("Company"), "") != "") { score = score + 10; }
+        if(ifnull(record.get("Phone"),   "") != "") { score = score + 10; }
+        if(ifnull(record.get("Website"), "") != "") { score = score + 10; }
+
+        if(masterRecord == null || score > masterScore)
+        {
+            masterRecord = record;
+            masterScore  = score;
+        }
+    }
+
+    masterId = masterRecord.get("id");
+
+    // ==========================================
+    // FIELD ARBITRATION
+    // Identify which child record has the best
+    // Phone and Website when the master is missing them.
+    // We track the child ID so we can include these
+    // fields in the _fields array of the merge payload
+    // ==========================================
+    phoneSourceId   = "";
+    websiteSourceId = "";
+
+    if(ifnull(masterRecord.get("Phone"), "") == "")
+    {
+        for each record in records
+        {
+            if(record.get("id") != masterId &&
+               ifnull(record.get("Phone"), "") != "")
+            {
+                phoneSourceId = record.get("id");
+                break;
+            }
+        }
+    }
+
+    if(ifnull(masterRecord.get("Website"), "") == "")
+    {
+        for each record in records
+        {
+            if(record.get("id") != masterId &&
+               ifnull(record.get("Website"), "") != "")
+            {
+                websiteSourceId = record.get("id");
+                break;
+            }
+        }
+    }
+
+    // ==========================================
+    // CHILD IDS
+    // ==========================================
+    childIds = List();
+    for each record in records
+    {
+        recordId = record.get("id");
+        if(recordId != masterId) { childIds.add(recordId); }
+    }
+
+    // ==========================================
+    // SAFETY LIMIT
+    // ==========================================
+    if(childIds.size() > 100)
+    {
+        result = Map();
+        result.put("Email",           emailValue);
+        result.put("Status",          "SKIPPED");
+        result.put("Reason",          "Duplicate group exceeds 100 records. Review manually");
+        result.put("Duplicate_Count", records.size());
+        return result.toString();
+    }
+
+    // ==========================================
+    // BATCH CHILDREN INTO GROUPS OF 2
+    // ==========================================
+    batches     = List();
+    currentBatch = List();
+
+    for each childId in childIds
+    {
+        currentBatch.add(childId);
+        if(currentBatch.size() == 2)
+        {
+            batches.add(currentBatch);
+            currentBatch = List();
+        }
+    }
+    if(currentBatch.size() > 0) { batches.add(currentBatch); }
+
+    // ==========================================
+    // MERGE EXECUTION
+    // For each batch, build the data array.
+    // If a child is the source of a winning Phone or
+    // Website value, include those fields in its
+    // _fields array so the Merge API pulls them onto
+    // the master instead of discarding them.
+    // ==========================================
+    groupStatus   = "SUCCESS";
+    failureReason = "";
+    mergedCount   = 0;
+
+    for each batch in batches
+    {
+        dataList = List();
+
+        for each childId in batch
+        {
+            childMap    = Map();
+            childMap.put("id", childId);
+
+            fieldsToTake = List();
+
+            if(childId == phoneSourceId)
+            {
+                fieldMap = Map();
+                fieldMap.put("api_name", "Phone");
+                fieldsToTake.add(fieldMap);
+            }
+            if(childId == websiteSourceId)
+            {
+                fieldMap = Map();
+                fieldMap.put("api_name", "Website");
+                fieldsToTake.add(fieldMap);
+            }
+
+            if(fieldsToTake.size() > 0)
+            {
+                childMap.put("_fields", fieldsToTake);
+            }
+
+            dataList.add(childMap);
+        }
+
+        mergeItem = Map();
+        mergeItem.put("data", dataList);
+
+        mergeList = List();
+        mergeList.add(mergeItem);
+
+        payload = Map();
+        payload.put("merge", mergeList);
+
+        mergeResponse = invokeurl
+        [
+            url: "https://www.zohoapis.com/crm/v8/Leads/" + masterId + "/actions/merge"
+            type: POST
+            parameters: payload.toString()
+            connection: "crm_oauth_connection"
+        ];
+
+        mergeInfo = mergeResponse.get("merge");
+
+        if(mergeInfo != null)
+        {
+            firstResult = mergeInfo.get(0);
+            if(firstResult.get("status") == "success")
+            {
+                mergedCount = mergedCount + batch.size();
+            }
+            else
+            {
+                groupStatus   = "FAILED";
+                failureReason = firstResult.get("code") + " - " + firstResult.get("message");
+            }
+        }
+    }
+
+    // ==========================================
+    // RESULT
+    // ==========================================
+    result = Map();
+    result.put("Email",           groupEmail);
+    result.put("Status",          groupStatus);
+    if(failureReason != "") { result.put("Reason", failureReason); }
+    result.put("Master_ID",       masterId);
+    result.put("Duplicate_Count", records.size());
+    result.put("Merged_Count",    mergedCount);
+
+    return result.toString();
+}
+

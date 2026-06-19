@@ -1,0 +1,37 @@
+string button.cleanupAllDuplicates()
+{
+    emailString = standalone.findDuplicateEmails();
+
+    // Split on pipe to match the separator used in findDuplicateEmails
+    duplicateEmails = emailString.toList("|");
+
+    successGroups = 0;
+    failedGroups = 0;
+    skippedGroups = 0;
+    groupResults = List();
+    processedCount = 0;
+
+    for each emailValue in duplicateEmails
+    {
+        resultText = standalone.cleanupDuplicateGroup(emailValue);
+        groupResults.add(resultText);
+
+        if(resultText.contains("\"Status\":\"SUCCESS\""))      { successGroups = successGroups + 1; }
+        else if(resultText.contains("\"Status\":\"FAILED\""))  { failedGroups = failedGroups + 1; }
+        else if(resultText.contains("\"Status\":\"SKIPPED\"")) { skippedGroups = skippedGroups + 1; }
+
+        processedCount = processedCount + 1;
+    }
+
+    summary = Map();
+    summary.put("Status", "COMPLETED");
+    summary.put("Duplicate_Groups_Found", duplicateEmails.size());
+    summary.put("Duplicate_Groups_Processed", processedCount);
+    summary.put("Success_Groups", successGroups);
+    summary.put("Failed_Groups", failedGroups);
+    summary.put("Skipped_Groups", skippedGroups);
+    summary.put("Results", groupResults);
+
+    return summary.toString();
+}
+
