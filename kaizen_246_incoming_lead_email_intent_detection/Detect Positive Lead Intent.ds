@@ -198,7 +198,7 @@ if(cleanBody == "" || cleanBody.length() < 10)
 	return;
 }
 // STEP 5: Call Zia API for Intent Analysis - FIXED VERSION
-// Create a simple prompt for Zia. Please note that the strong prompt helps Zia to detect the prompt. 
+// Create a simple prompt for Zia. Please note that the strong prompt helps Zia to detect the sentiments. 
 analysisPrompt = "Analyze this sales email and respond with ONLY 'YES' or 'NO'. Does this email show PURCHASE_INTENT? Purchase intent means the lead wants to buy, get pricing, schedule demo, or start trial.\n\nSubject: " + emailSubject + "\n\nEmail: " + cleanBody;
 
 // analysisPrompt = "You are an enterprise-grade B2B sales intent detection AI. Analyze the incoming lead email and determine whether the customer shows strong and genuine PURCHASE_INTENT. Strong purchase intent includes asking for pricing, quotation, demo, free trial, implementation, onboarding, integrations, contract discussion, deployment timelines, budget approval, commercial discussion, next steps, or clear evaluation of the product for business adoption. Ignore greetings, thank you emails, support requests, informational questions, casual discussions, or unrelated conversations. Respond ONLY with YES if the lead is highly likely to purchase or actively evaluate the product for buying decision. Otherwise respond ONLY with NO.\n\nSubject: " + emailSubject + "\n\nEmail Content: " + cleanBody;
