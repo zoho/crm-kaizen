@@ -1,0 +1,119 @@
+void schedule.Decay_Scoring_System()
+{
+    // Fields on Leads: Engagement_Score (Number), Current_Intent_Score (String), Last_Engagement_Time (DateTime)
+    cutoffDate = zoho.currentdate.addDay(-1);
+    cutoffDateTimeStr = cutoffDate.toString("yyyy-MM-dd") + "T08:00:00+05:30";
+    triggerOptions = Map();
+    triggerOptions.put("trigger",{});
+    // leftPad trick generates a 6-element list to drive 6 iterations without while
+    // 6 passes × 2,000 records = 12,000 qualifying leads max per daily run
+    pageLoopList = "".leftPad(6).replaceAll(" ",",").toList().subList(0,6);
+    pageOffset = 0;
+    updateBatch = List();
+    for each el in pageLoopList
+    {
+        whereFilter = "Last_Engagement_Time < '" + cutoffDateTimeStr + "' AND (Current_Intent_Score is null OR Current_Intent_Score != '0')";
+        coqlQuery = "SELECT id, Engagement_Score, Current_Intent_Score, Last_Engagement_Time FROM Leads WHERE (" + whereFilter + ") LIMIT " + pageOffset.toString() + ", 2000";
+        // Map variable required — inline literals inside invokeurl parameters cause parse errors
+        coqlBody = Map();
+        coqlBody.put("select_query",coqlQuery);
+        coqlResponse = invokeurl
+        [
+            url :"https://www.zohoapis.in/crm/v8/coql"
+            type :POST
+            parameters:coqlBody.toString()
+            connection:"zylker_oauth_connection"
+        ];
+        if(coqlResponse == null)
+        {
+            break;
+        }
+        if(coqlResponse.get("status") != null && coqlResponse.get("status").toString() == "error")
+        {
+            info "COQL error: " + coqlResponse.get("code").toString() + " - " + coqlResponse.get("message").toString();
+            break;
+        }
+        pageData = coqlResponse.get("data");
+        if(pageData == null)
+        {
+            info "No data key in response - check COQL query syntax";
+            break;
+        }
+        for each lead in pageData.toJSONList()
+        {
+            leadId = lead.get("id");
+            leadScoreRaw = lead.get("Engagement_Score");
+            currentIntentScoreRaw = lead.get("Current_Intent_Score");
+            lastScoreUpdatedRaw = lead.get("Last_Engagement_Time");
+            if(leadId == null || leadScoreRaw == null || lastScoreUpdatedRaw == null)
+            {
+                continue;
+            }
+            if(leadId.toString().trim().length() == 0)
+            {
+                continue;
+            }
+            // Skip only if Current_Intent_Score is exactly "0"; null and empty proceed
+            if(currentIntentScoreRaw != null && currentIntentScoreRaw.toString().trim() == "0")
+            {
+                continue;
+            }
+            leadScore = leadScoreRaw.toDecimal();
+            // Extract date portion from COQL datetime string (e.g. "2024-01-15T10:30:00+05:30")
+            lastUpdatedDateStr = lastScoreUpdatedRaw.toString().subString(0,10);
+            lastUpdatedDate = lastUpdatedDateStr.toDate("yyyy-MM-dd");
+            inactiveDays = lastUpdatedDate.daysBetween(zoho.currentdate);
+            // Guard: skip if still within 24 hours (timezone rounding edge case)
+            if(inactiveDays <= 0)
+            {
+                continue;
+            }
+            // Cap at 5: beyond day 5 the formula yields 0 regardless
+            if(inactiveDays > 5)
+            {
+                inactiveDays = 5;
+            }
+            // Quadratic decay: remainingFactor = (1 - inactiveDays/5)^2
+            ratio = inactiveDays.toDecimal() / 5.0;
+            remainingFactor = (1.0 - ratio) * (1.0 - ratio);
+            newIntentScore = leadScore * remainingFactor;
+            if(newIntentScore < 0)
+            {
+                newIntentScore = 0.0;
+            }
+            // Round to nearest integer
+            newIntentScore = round(newIntentScore,0);
+            // Current_Intent_Score is a String field — store as integer string
+            updateMap = Map();
+            updateMap.put("id",leadId);
+            updateMap.put("Current_Intent_Score",newIntentScore.toLong().toString());
+            updateBatch.add(updateMap);
+            // Flush in batches of 100 (zoho.crm.v8.bulkUpdate cap)
+            if(updateBatch.size() == 100)
+            {
+                zoho.crm.v8.bulkUpdate("Leads",updateBatch,triggerOptions);
+                updateBatch = List();
+            }
+        }
+        // Exit the pagination loop when no further records exist
+        responseInfo = coqlResponse.get("info");
+        if(responseInfo != null)
+        {
+            moreFlag = responseInfo.get("more_records");
+            if(moreFlag == null || moreFlag == false)
+            {
+                break;
+            }
+        }
+        else
+        {
+            break;
+        }
+        pageOffset = pageOffset + 2000;
+    }
+    // Flush remaining records that did not fill a full batch of 100
+    if(!updateBatch.isEmpty())
+    {
+        zoho.crm.v8.bulkUpdate("Leads",updateBatch,triggerOptions);
+    }
+}
