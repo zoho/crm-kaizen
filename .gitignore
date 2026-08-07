@@ -17,3 +17,11 @@ node_modules/
 # Environment
 .env
 .env.local
+
+# TLS certificates and private keys
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
