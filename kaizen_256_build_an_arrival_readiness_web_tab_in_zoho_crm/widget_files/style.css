@@ -1,0 +1,271 @@
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #f7f8fa;
+    color: #202124;
+}
+
+.app {
+    width: 100%;
+    min-height: 100vh;
+    padding: 28px 36px;
+}
+
+
+/* Header */
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 24px;
+}
+
+.eyebrow {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1.2px;
+    color: #70757a;
+    margin-bottom: 5px;
+}
+
+h1 {
+    margin: 0;
+    font-size: 28px;
+}
+
+.header p {
+    margin: 6px 0 0;
+    color: #6b7280;
+}
+
+.refresh-btn {
+    border: 1px solid #d9dce1;
+    background: white;
+    padding: 9px 15px;
+    border-radius: 7px;
+    cursor: pointer;
+}
+
+
+/* Summary */
+
+.summary {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    margin-bottom: 25px;
+}
+
+.summary-card {
+    background: white;
+    border: 1px solid #e4e6e9;
+    border-radius: 10px;
+    padding: 18px;
+}
+
+.summary-card strong {
+    display: block;
+    font-size: 28px;
+    margin: 7px 0;
+}
+
+.label {
+    font-size: 13px;
+    color: #656b73;
+}
+
+.sub {
+    font-size: 12px;
+    color: #8a9098;
+}
+
+.summary-card.ready {
+    border-left: 4px solid #3d8b68;
+}
+
+.summary-card.action {
+    border-left: 4px solid #d39a28;
+}
+
+.summary-card.attention {
+    border-left: 4px solid #c94a4a;
+}
+
+
+/* Toolbar */
+
+.toolbar {
+    margin-bottom: 18px;
+}
+
+.filter-group {
+    display: flex;
+    gap: 8px;
+}
+
+.filter {
+    background: white;
+    border: 1px solid #dfe2e6;
+    border-radius: 20px;
+    padding: 7px 14px;
+    cursor: pointer;
+    font-size: 13px;
+}
+
+.filter.active {
+    background: #252a31;
+    color: white;
+    border-color: #252a31;
+}
+
+
+/* Section */
+
+.section-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.section-heading h2 {
+    font-size: 17px;
+    margin: 0;
+}
+
+#lastUpdated {
+    font-size: 11px;
+    color: #8a9098;
+}
+
+
+/* Arrival */
+
+.arrival-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.arrival {
+    display: grid;
+    grid-template-columns:
+    1.5fr
+    1fr
+    1.2fr
+    2fr
+    1.2fr;
+    align-items: center;
+    gap: 20px;
+
+    background: white;
+    border: 1px solid #e3e5e8;
+    border-radius: 9px;
+    padding: 15px 18px;
+}
+
+.guest {
+    font-weight: 600;
+}
+
+.booking {
+    font-size: 11px;
+    color: #8a9098;
+    margin-top: 3px;
+}
+
+.arrival-time {
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.issue {
+    font-size: 13px;
+}
+
+.action {
+    font-size: 12px;
+    font-weight: 600;
+}
+
+
+/* Status */
+
+.status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    width: fit-content;
+
+    padding: 5px 9px;
+    border-radius: 20px;
+
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.status.ready {
+    background: #eaf5ef;
+    color: #367257;
+}
+
+.status.action-required {
+    background: #fff5df;
+    color: #9a6c17;
+}
+
+.status.attention {
+    background: #fcebea;
+    color: #a33d3d;
+}
+
+
+/* Buttons */
+
+.action-btn {
+    border: 1px solid #d8dce1;
+    background: white;
+    border-radius: 6px;
+    padding: 7px 10px;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.action-btn:hover {
+    background: #f4f5f6;
+}
+
+
+/* Empty */
+
+.empty {
+    padding: 50px;
+    text-align: center;
+    background: white;
+    border: 1px solid #e3e5e8;
+    border-radius: 9px;
+    color: #777;
+}
+
+.loading {
+    padding: 50px;
+    text-align: center;
+    color: #777;
+}
+
+
+@media (max-width: 900px) {
+
+    .summary {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .arrival {
+        grid-template-columns: 1fr 1fr;
+    }
+}
