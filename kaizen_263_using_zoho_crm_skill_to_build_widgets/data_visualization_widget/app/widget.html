@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>Data Visualization Sandbox</title>
+    <link rel="stylesheet" href="css/style.css">
+  </head>
+  <body>
+    <div id="app">
+      <header class="toolbar">
+        <h1>Data Visualization Sandbox</h1>
+        <div class="filters">
+          <label>
+            Pipeline
+            <select id="pipelineFilter"><option value="">All Pipelines</option></select>
+          </label>
+          <label>
+            Closing Date from
+            <input type="date" id="dateFrom">
+          </label>
+          <label>
+            to
+            <input type="date" id="dateTo">
+          </label>
+          <button id="applyFilters">Apply</button>
+        </div>
+        <div id="statusMsg" class="status"></div>
+      </header>
+
+      <main class="panels">
+        <section class="panel funnel-panel">
+          <h2>Deals by Stage</h2>
+          <div id="funnelChart"></div>
+        </section>
+
+        <section class="panel graph-panel">
+          <h2>Deals &harr; Accounts &harr; Contacts</h2>
+          <div id="graphChart"></div>
+          <div id="tooltip" class="tooltip hidden"></div>
+        </section>
+      </main>
+    </div>
+
+    <script src="https://live.zwidgets.com/js-sdk/1.5/ZohoEmbededAppSDK.min.js"></script>
+    <script src="js/vendor/d3.v7.min.js"></script>
+    <script src="js/app.js"></script>
+  </body>
+</html>
