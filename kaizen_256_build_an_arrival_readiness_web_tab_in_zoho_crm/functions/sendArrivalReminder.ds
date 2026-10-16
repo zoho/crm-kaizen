@@ -1,0 +1,80 @@
+string standalone.sendArrivalReminder(String bookingId)
+{
+response = Map();
+if(bookingId == null || bookingId == "")
+{
+	response.put("success",false);
+	response.put("message","Booking ID is required.");
+	return response.toString();
+}
+/*
+	 * Get Booking
+	 */
+booking = zoho.crm.getRecordById("Bookings",bookingId);
+info "Booking: " + booking;
+if(booking == null || booking.isEmpty())
+{
+	response.put("success",false);
+	response.put("message","Booking not found.");
+	return response.toString();
+}
+/*
+	 * Get guest details
+	 */
+guestName = ifnull(booking.get("Guest_Name"),"Guest");
+guestEmail = ifnull(booking.get("Email"),"");
+verificationLink = ifnull(booking.get("Verification_Link"),"https://example.com/verify");
+reminderSent = ifnull(booking.get("Reminder_Sent"),false);
+info "Guest: " + guestName;
+info "Email: " + guestEmail;
+info "Verification link: " + verificationLink;
+info "Reminder already sent: " + reminderSent;
+/*
+	 * Validate email
+	 */
+if(guestEmail == "")
+{
+	response.put("success",false);
+	response.put("message","No guest email is available for this booking.");
+	return response.toString();
+}
+/*
+	 * Prevent duplicate reminders
+	 */
+if(reminderSent == true)
+{
+	response.put("success",false);
+	response.put("message","Reminder has already been sent for this booking.");
+	return response.toString();
+}
+/*
+	 * Email content
+	 */
+emailBody = "<p>Hi " + guestName + ",</p>" + "<p>We look forward to welcoming you to our property.</p>" + "<p>" + "Please complete your pre-arrival ID verification " + "before your visit to help us make your check-in " + "quicker and smoother." + "</p>" + "<p>" + "<a href='" + verificationLink + "'>" + "Complete ID verification" + "</a>" + "</p>" + "<p>" + "Thank you,<br>" + "Hotel Reception" + "</p>";
+/*
+	 * Send email
+	 */
+sendmail
+[
+	from :zoho.loginuserid
+	to :guestEmail
+	subject :"Complete your pre-arrival ID verification"
+	message :emailBody
+]
+info "Reminder email sent successfully.";
+/*
+	 * Update Booking
+	 */
+updateData = Map();
+updateData.put("Reminder_Sent",true);
+updateData.put("Reminder_Sent_At",zoho.currenttime.toString("yyyy-MM-dd'T'HH:mm:ssXXX"));
+updateResponse = zoho.crm.updateRecord("Bookings",bookingId,updateData);
+info "Booking update response: " + updateResponse;
+/*
+	 * Final response
+	 */
+response.put("success",true);
+response.put("message","Verification reminder sent successfully.");
+response.put("guest",guestName);
+return response.toString();
+}

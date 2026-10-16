@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Arrival Readiness</title>
+
+    <link
+        rel="stylesheet"
+        href="style.css"
+    >
+
+    <!-- Zoho CRM Embedded App SDK -->
+    <script src="https://live.zwidgets.com/js-sdk/1.2/ZohoEmbededAppSDK.min.js"></script>
+
+</head>
+
+
+<body>
+
+<div class="app">
+
+
+    <!-- =====================================================
+         HEADER
+         ===================================================== -->
+
+    <header class="header">
+
+        <div>
+
+            <div class="eyebrow">
+                HOTEL OPERATIONS
+            </div>
+
+            <h1>
+                Arrival Readiness
+            </h1>
+
+            <p>
+                Monitor and resolve pre-arrival issues
+                before guests reach the property.
+            </p>
+
+        </div>
+
+
+        <div class="header-actions">
+
+            <div class="last-refresh">
+
+                <span>
+                    Last updated
+                </span>
+
+                <strong id="lastUpdated">
+                    —
+                </strong>
+
+            </div>
+
+
+            <button
+                type="button"
+                class="refresh-btn"
+                onclick="loadDashboard()"
+            >
+                ↻ Refresh
+            </button>
+
+        </div>
+
+    </header>
+
+
+
+    <!-- =====================================================
+         SUMMARY CARDS
+         ===================================================== -->
+
+    <section class="summary">
+
+
+        <!-- Total arrivals -->
+
+        <div class="summary-card total">
+
+            <span class="label">
+                Arrivals
+            </span>
+
+            <strong id="total">
+                —
+            </strong>
+
+            <span class="sub">
+                Next 48 hours
+            </span>
+
+        </div>
+
+
+
+        <!-- Ready -->
+
+        <div class="summary-card ready">
+
+            <span class="label">
+                Ready
+            </span>
+
+            <strong id="ready">
+                —
+            </strong>
+
+            <span class="sub">
+                No action required
+            </span>
+
+        </div>
+
+
+
+        <!-- Action required -->
+
+        <div class="summary-card action">
+
+            <span class="label">
+                Action required
+            </span>
+
+            <strong id="actionRequired">
+                —
+            </strong>
+
+            <span class="sub">
+                Needs follow-up
+            </span>
+
+        </div>
+
+
+
+        <!-- Attention -->
+
+        <div class="summary-card attention">
+
+            <span class="label">
+                Attention
+            </span>
+
+            <strong id="attention">
+                —
+            </strong>
+
+            <span class="sub">
+                Needs manual attention
+            </span>
+
+        </div>
+
+
+    </section>
+
+
+
+    <!-- =====================================================
+         FILTERS
+         ===================================================== -->
+
+    <section class="toolbar">
+
+        <div class="filter-group">
+
+
+            <button
+                type="button"
+                class="filter active"
+                data-filter="all"
+                onclick="filterArrivals('all', this)"
+            >
+                All
+            </button>
+
+
+            <button
+                type="button"
+                class="filter"
+                data-filter="Attention"
+                onclick="filterArrivals('Attention', this)"
+            >
+                Attention
+            </button>
+
+
+            <button
+                type="button"
+                class="filter"
+                data-filter="Action Required"
+                onclick="filterArrivals('Action Required', this)"
+            >
+                Action required
+            </button>
+
+
+            <button
+                type="button"
+                class="filter"
+                data-filter="Ready"
+                onclick="filterArrivals('Ready', this)"
+            >
+                Ready
+            </button>
+
+
+        </div>
+
+    </section>
+
+
+
+    <!-- =====================================================
+         UPCOMING ARRIVALS
+         ===================================================== -->
+
+    <section class="arrivals-section">
+
+
+        <div class="section-heading">
+
+            <h2>
+                Upcoming arrivals
+            </h2>
+
+        </div>
+
+
+        <div
+            id="arrivalList"
+            class="arrival-list"
+        >
+
+            <div class="loading">
+                Loading arrivals...
+            </div>
+
+        </div>
+
+
+    </section>
+
+
+</div>
+
+
+
+<!-- =========================================================
+     WIDGET JAVASCRIPT
+     ========================================================= -->
+
+<script src="widget.js"></script>
+
+
+</body>
+
+</html>

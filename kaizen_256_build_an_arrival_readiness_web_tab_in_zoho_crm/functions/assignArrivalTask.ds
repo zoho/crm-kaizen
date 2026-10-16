@@ -1,0 +1,39 @@
+string standalone.assignArrivalTask(String bookingId)
+{
+response = Map();
+if(bookingId == null || bookingId == "")
+{
+	response.put("success",false);
+	response.put("message","Booking ID is required.");
+	return response.toString();
+}
+booking = zoho.crm.getRecordById("Bookings",bookingId);
+if(booking == null || booking.isEmpty())
+{
+	response.put("success",false);
+	response.put("message","Booking not found.");
+	return response.toString();
+}
+requestStatus = ifnull(booking.get("Request_Status"),"");
+info "Current Request Status: " + requestStatus;
+if(requestStatus == "Assigned")
+{
+	response.put("success",false);
+	response.put("message","Request is already assigned.");
+	return response.toString();
+}
+updateData = Map();
+updateData.put("Request_Status","Assigned");
+updateResponse = zoho.crm.updateRecord("Bookings",bookingId,updateData);
+info "Booking update response: " + updateResponse;
+if(updateResponse == null || updateResponse.get("id") == null)
+{
+	response.put("success",false);
+	response.put("message","Unable to update request status.");
+	return response.toString();
+}
+response.put("success",true);
+response.put("message","Request marked as assigned.");
+response.put("booking_id",bookingId);
+return response.toString();
+}

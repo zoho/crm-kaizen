@@ -1,0 +1,152 @@
+string standalone.getArrivalReadiness()
+{
+/*
+	 * Function: getArrivalReadiness
+	 * Purpose: Return hotel arrivals requiring attention
+	 */
+now = zoho.currenttime;
+endTime = now.addHour(48);
+info "======================================";
+info "ARRIVAL READINESS";
+info "======================================";
+info "Current time: " + now;
+info "End time: " + endTime;
+/*
+	 * Get bookings.
+	 */
+bookings = zoho.crm.getRecords("Bookings",1,200);
+info "Bookings retrieved: " + bookings.size();
+result = List();
+readyCount = 0;
+actionCount = 0;
+attentionCount = 0;
+/*
+	 * Process each booking.
+	 */
+for each  booking in bookings
+{
+	checkInValue = booking.get("Check_In");
+	if(checkInValue != null)
+	{
+		/*
+			 * Keep the ORIGINAL CRM value for display.
+			 *
+			 * Example:
+			 * 2026-08-21T19:00:00+05:30
+			 */
+		checkInOriginal = checkInValue.toString();
+		info "Original Check-in: " + checkInOriginal;
+		/*
+			 * Parse only the date/time portion for
+			 * comparison with zoho.currenttime.
+			 *
+			 * We deliberately do NOT use the parsed
+			 * value for displaying the arrival time.
+			 */
+		checkInText = checkInOriginal.subString(0,19);
+		checkIn = checkInText.toTime("yyyy-MM-dd'T'HH:mm:ss");
+		info "Comparison Check-in: " + checkIn;
+		/*
+			 * Only process arrivals within next 48 hours.
+			 */
+		if(checkIn >= now && checkIn <= endTime)
+		{
+			guestName = ifnull(booking.get("Guest_Name"),"Guest");
+			bookingName = ifnull(booking.get("Name"),"");
+			bookingId = booking.get("id");
+			idVerification = ifnull(booking.get("ID_Verification"),"Pending");
+			specialRequest = ifnull(booking.get("Special_Request"),"");
+			requestStatus = ifnull(booking.get("Request_Status"),"");
+			info "Booking: " + booking.get("Name");
+			info "Request Status from CRM: [" + requestStatus + "]";
+			/*
+				 * Default readiness.
+				 */
+			readiness = "Ready";
+			priority = "low";
+			issue = "No action required";
+			recommendedAction = "No action";
+			/*
+				 * Determine readiness.
+				 */
+			if(idVerification == "Failed")
+			{
+				readiness = "Attention";
+				priority = "high";
+				issue = "ID verification failed";
+				recommendedAction = "Follow up";
+				attentionCount = attentionCount + 1;
+			}
+			else if(idVerification == "Pending")
+			{
+				readiness = "Action Required";
+				priority = "medium";
+				issue = "ID verification pending";
+				recommendedAction = "Send reminder";
+				actionCount = actionCount + 1;
+			}
+			else if(specialRequest != "" && requestStatus != "Assigned" && requestStatus != "Completed")
+			{
+				info "======================================";
+				info "SPECIAL REQUEST CHECK";
+				info "Booking: " + booking.get("Name");
+				info "Special Request: [" + specialRequest + "]";
+				info "Request Status: [" + requestStatus + "]";
+				info "======================================";
+				readiness = "Action Required";
+				priority = "medium";
+				issue = "Special request is unassigned";
+				recommendedAction = "Assign task";
+				actionCount = actionCount + 1;
+			}
+			else
+			{
+				readyCount = readyCount + 1;
+			}
+			/*
+				 * Build arrival object.
+				 */
+			arrival = Map();
+			arrival.put("id",bookingId);
+			arrival.put("booking",bookingName);
+			arrival.put("guest",guestName);
+			/*
+				 * IMPORTANT:
+				 *
+				 * Return the ORIGINAL CRM datetime.
+				 *
+				 * Do NOT return checkIn here.
+				 */
+			arrival.put("arrival",checkInOriginal);
+			arrival.put("readiness",readiness);
+			arrival.put("priority",priority);
+			arrival.put("issue",issue);
+			arrival.put("action",recommendedAction);
+			result.add(arrival);
+		}
+	}
+}
+/*
+	 * Summary.
+	 */
+summary = Map();
+summary.put("total",result.size());
+summary.put("ready",readyCount);
+summary.put("action_required",actionCount);
+summary.put("attention",attentionCount);
+/*
+	 * Final response.
+	 */
+response = Map();
+response.put("success",true);
+response.put("generated_at",now);
+response.put("window_hours",48);
+response.put("summary",summary);
+response.put("arrivals",result);
+info "======================================";
+info "FINAL SUMMARY";
+info "======================================";
+info summary;
+info "Arrivals returned: " + result.size();
+return response.toString();
+}
