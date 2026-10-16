@@ -1,0 +1,159 @@
+void automation.createBooksInvoiceForClosedWonDeal(String dealId)
+{
+invoiceField = "Invoice";
+booksBase = "https://www.zohoapis.com/books/v3";
+booksOrgId = "131786026";
+try 
+{
+	info "Closed Won invoice sync started - deal " + dealId + " org " + booksOrgId;
+	dealQuery = Map();
+	dealQuery.put("fields","Stage,Account_Name," + invoiceField);
+	deal = zoho.crm.v8.getRecordById("Deals",dealId.toLong(),dealQuery);
+	info deal;
+	if(deal.get("status") == "failure")
+	{
+		info "Deal not found: " + dealId;
+		return;
+	}
+	// Idempotency guard: the workflow may fire more than once
+	if(deal.get(invoiceField) != null && deal.get(invoiceField).toString() != "")
+	{
+		info "Invoice already exists for deal " + dealId;
+		return;
+	}
+	// CRM account ID comes straight from the deal record
+	accountRef = deal.get("Account_Name");
+	if(accountRef == null)
+	{
+		info "No Account associated with deal " + dealId;
+		return;
+	}
+	crmAccountId = accountRef.get("id");
+	info crmAccountId;
+	// Step 1: associated Quote ID from the Deal's related list (relation name Quotes)
+	quoteListQuery = Map();
+	quoteListQuery.put("fields","id");
+	relatedQuotes = zoho.crm.v8.getRelatedRecords("Quotes","Deals",dealId.toLong(),quoteListQuery,1,5);
+	info relatedQuotes;
+	quoteId = null;
+	quoteCount = 0;
+	for each  rq in relatedQuotes
+	{
+		quoteCount = quoteCount + 1;
+		if(quoteId == null)
+		{
+			quoteId = rq.get("id");
+		}
+	}
+	if(quoteId == null)
+	{
+		info "No Quote found for deal " + dealId;
+		return;
+	}
+	if(quoteCount > 1)
+	{
+		info "Multiple quotes found (" + quoteCount + "); using the first";
+	}
+	// Step 2: get the Quote record; Quoted_Items comes from this response
+	quoteQuery = Map();
+	quoteQuery.put("fields","Quoted_Items");
+	quote = zoho.crm.v8.getRecordById("Quotes",quoteId.toLong(),quoteQuery);
+	info quote;
+	if(quote.get("status") == "failure")
+	{
+		info "Quote not found: " + quoteId;
+		return;
+	}
+	quoteItems = quote.get("Quoted_Items");
+	if(quoteItems == null)
+	{
+		info "Quote " + quoteId + " has no line items";
+		return;
+	}
+	// Books customer ID, looked up by the CRM account ID
+	contactParams = Map();
+	contactParams.put("organization_id",booksOrgId);
+	contactParams.put("zcrm_account_id",crmAccountId);
+	info crmAccountId;
+	contactResp = invokeurl
+	[
+		url :booksBase + "/contacts"
+		type :GET
+		parameters:contactParams
+		connection:"books_oauth_connection"
+	];
+	info contactResp;
+	customerId = null;
+	for each  c in ifnull(contactResp.get("contacts"),{})
+	{
+		if(customerId == null)
+		{
+			customerId = c.get("contact_id");
+		}
+	}
+	if(customerId == null)
+	{
+		info "No Books customer found for CRM account " + crmAccountId;
+		return;
+	}
+	// Quoted_Items -> Books line items (key names tolerated in both casings)
+	lineItems = List();
+	for each  item in quoteItems
+	{
+		product = ifnull(item.get("Product_Name"),item.get("product"));
+		line = Map();
+		line.put("name",product.get("name"));
+		line.put("description",ifnull(item.get("Product_Description"),item.get("product_description")));
+		line.put("quantity",ifnull(item.get("Quantity"),item.get("quantity")));
+		line.put("rate",ifnull(item.get("List_Price"),item.get("list_price")));
+		discount = ifnull(item.get("Discount"),0);
+		if(discount.toDecimal() > 0)
+		{
+			line.put("discount",discount);
+		}
+		lineItems.add(line);
+	}
+	if(lineItems.size() == 0)
+	{
+		info "Quote " + quoteId + " has no line items";
+		return;
+	}
+	// Books creates invoices as drafts by default
+	invoiceBody = Map();
+	invoiceBody.put("customer_id",customerId);
+	invoiceBody.put("reference_number",dealId);
+	invoiceBody.put("line_items",lineItems);
+	info invoiceBody;
+	invoiceResp = invokeurl
+	[
+		url :booksBase + "/invoices?organization_id=" + booksOrgId
+		type :POST
+		body:invoiceBody.toString()
+		headers:{"Content-Type":"application/json"}
+		connection:"books_oauth_connection"
+	];
+	info invoiceResp;
+	if(invoiceResp.get("code") != 0 || invoiceResp.get("invoice") == null)
+	{
+		info "Books invoice creation failed: " + invoiceResp.get("message");
+		return;
+	}
+	invoiceId = invoiceResp.get("invoice").get("invoice_id");
+	// No options_map on purpose: workflows do not re-fire, so no update loop
+	updateMap = Map();
+	updateMap.put(invoiceField,invoiceId.toString());
+	updateResp = zoho.crm.v8.updateRecord("Deals",dealId.toLong(),updateMap);
+	info "Invoice " + invoiceId + " created and saved on deal " + dealId;
+}
+catch (e)
+{
+	info "Failed for deal " + dealId + ": " + e.toString();
+	sendmail
+	[
+		from :zoho.loginuserid
+		to :zoho.loginuserid
+		subject :"Books invoice creation failed for deal " + dealId
+		message :e.toString()
+	]
+}
+}

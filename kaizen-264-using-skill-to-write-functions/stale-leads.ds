@@ -1,0 +1,79 @@
+void schedule.markStaleLeads()
+{
+// Leads not modified for more than 30 days are flagged Lead_Health = "Stale"
+// Runs in up to 50 pages x 200 leads = 10,000 leads per execution
+try 
+{
+	cutoff = zoho.currenttime.subDay(30);
+	cutoffStr = cutoff.toString("yyyy-MM-dd'T'HH:mm:ss","UTC") + "+00:00";
+	pageSeq = "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50".toList(",");
+	staleIds = List();
+	lastId = 0;
+	// Keyset pagination on id (not offset), so paging stays stable and each lead is read once
+	for each  page in pageSeq
+	{
+		query = "select id, Lead_Status, Lead_Health from Leads where (Modified_Time < '" + cutoffStr + "' and id > " + lastId + ") order by id limit 0, 200";
+		bodyMap = Map();
+		bodyMap.put("select_query",query);
+		response = invokeurl
+		[
+			url :"https://www.zohoapis.in/crm/v8/coql"
+			type :POST
+			parameters:bodyMap.toString()
+			connection:"crm_oauth_connection"
+		];
+		// COQL returns HTTP 204 with an empty body when no rows match
+		if(!ifnull(response,"").toString().contains("\"data\""))
+		{
+			break;
+		}
+		rows = response.get("data");
+		for each  row in rows
+		{
+			lastId = row.get("id");
+			health = ifnull(row.get("Lead_Health"),"");
+			status = ifnull(row.get("Lead_Status"),"");
+			if(health != "Stale" && status != "Converted Lead")
+			{
+				staleIds.add(row.get("id"));
+			}
+		}
+		if(rows.size() < 200)
+		{
+			break;
+		}
+	}
+	info "Stale leads found: " + staleIds.size();
+	// bulkUpdate accepts at most 100 records per call
+	batch = List();
+	for each  leadId in staleIds
+	{
+		recordMap = Map();
+		recordMap.put("id",leadId);
+		recordMap.put("Lead_Health","Stale");
+		batch.add(recordMap);
+		if(batch.size() == 100)
+		{
+			updateResponse = zoho.crm.v8.bulkUpdate("Leads",batch);
+			info "Batch update response: " + updateResponse;
+			batch = List();
+		}
+	}
+	if(batch.size() > 0)
+	{
+		updateResponse = zoho.crm.v8.bulkUpdate("Leads",batch);
+		info "Batch update response: " + updateResponse;
+	}
+}
+catch (e)
+{
+	info "markStaleLeads failed: " + e.message;
+	sendmail
+	[
+		from :zoho.loginuserid
+		to :zoho.loginuserid
+		subject :"markStaleLeads scheduled function failed"
+		message :"Error: " + e.message
+	]
+}
+}

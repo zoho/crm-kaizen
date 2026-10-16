@@ -1,0 +1,14 @@
+void automation.copyPhoneToMobile(Int leadId,String phone,String mobile)
+{
+phoneValue = ifnull(phone,"").trim();
+mobileValue = ifnull(mobile,"").trim();
+// Nothing to copy, or Mobile already matches
+if(phoneValue.length() == 0 || phoneValue == mobileValue)
+{
+	return;
+}
+updateMap = Map();
+updateMap.put("Mobile",phoneValue);
+response = zoho.crm.v8.updateRecord("Leads",leadId.toLong(),updateMap);
+info response;
+}
